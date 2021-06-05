@@ -86,8 +86,9 @@ namespace XIVLauncher.Windows
             EnableHooksCheckBox.Checked += EnableHooksCheckBox_OnChecked;
 
             var val = (decimal) App.Settings.SpeedLimitBytes / BYTES_TO_MB;
-
             SpeedLimiterUpDown.Value = val;
+
+            DownloadsLimiterUpDown.Value = App.Settings.DownloadsLimit > 0 ? App.Settings.DownloadsLimit : 4;
         }
 
         private void AcceptButton_Click(object sender, RoutedEventArgs e)
@@ -123,6 +124,7 @@ namespace XIVLauncher.Windows
             SettingsDismissed?.Invoke(this, null);
 
             App.Settings.SpeedLimitBytes = (long) (SpeedLimiterUpDown.Value * BYTES_TO_MB);
+            App.Settings.DownloadsLimit = (int) DownloadsLimiterUpDown.Value;
         }
 
         private void GitHubButton_OnClick(object sender, RoutedEventArgs e)
