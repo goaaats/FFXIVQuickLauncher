@@ -715,7 +715,7 @@ namespace XIVLauncher.Windows
 
             var gameProcess = Launcher.LaunchGame(loginResult.UniqueId, loginResult.OauthLogin.Region,
                     loginResult.OauthLogin.MaxExpansion, App.Settings.SteamIntegrationEnabled,
-                    SteamCheckBox.IsChecked == true, App.Settings.AdditionalLaunchArgs, App.Settings.GamePath, App.Settings.IsDx11, App.Settings.Language.GetValueOrDefault(ClientLanguage.English), App.Settings.EncryptArguments.GetValueOrDefault(false));
+                    SteamCheckBox.IsChecked == true, App.Settings.AdditionalLaunchArgs, App.Settings.GamePath, App.Settings.IsDx11, App.Settings.RefreshRate, App.Settings.Language.GetValueOrDefault(ClientLanguage.English), App.Settings.EncryptArguments.GetValueOrDefault(false));
 
             if (gameProcess == null)
             {
@@ -769,6 +769,7 @@ namespace XIVLauncher.Windows
                 }
 
                 Log.Information("Game has exited.");
+                RefreshRate.RestoreRefreshRate();   // Restore the original refresh rate.
                 addonMgr.StopAddons();
                 
                 CleanUp();
