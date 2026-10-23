@@ -82,8 +82,6 @@ namespace XIVLauncher.Windows
 
             LaunchArgsTextBox.Text = App.Settings.AdditionalLaunchArgs;
 
-            InjectorArgsTextBox.Text = App.Settings.AdditionalInjectorArgs;
-
             DpiAwarenessComboBox.SelectedIndex = (int) App.Settings.DpiAwareness.GetValueOrDefault(DpiAwareness.Unaware);
 
             VersionLabel.Text += " - v" + AppUtil.GetAssemblyVersion() + " - " + AppUtil.GetGitHash() + " - " + Environment.Version;
@@ -125,8 +123,6 @@ namespace XIVLauncher.Windows
             App.Settings.OtpAlwaysOnTopEnabled = OtpAlwaysOnTopCheckBox.IsChecked == true;
 
             App.Settings.AdditionalLaunchArgs = LaunchArgsTextBox.Text;
-
-            App.Settings.AdditionalInjectorArgs = this.InjectorArgsTextBox.Text;
 
             App.Settings.DpiAwareness = (DpiAwareness) DpiAwarenessComboBox.SelectedIndex;
 
