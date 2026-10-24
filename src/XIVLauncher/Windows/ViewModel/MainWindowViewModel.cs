@@ -300,13 +300,19 @@ namespace XIVLauncher.Windows.ViewModel
             if (loginResult == null)
                 return;
 
-            if (otp != null)
+            try
+            {
                 AccountManager.UpdateLastSuccessfulOtp(AccountManager.CurrentAccount, otp);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Could not save last successful OTP");
+            }
 
             Log.Verbose("[LR] {State} {NumPatches} {Playable}",
-                        loginResult.State,
-                        loginResult.PendingPatches.Length,
-                        loginResult.OauthLogin?.Playable);
+                loginResult.State,
+                loginResult.PendingPatches.Length,
+                loginResult.OauthLogin?.Playable);
 
             if (await TryProcessLoginResult(loginResult, isSteam, action).ConfigureAwait(false))
             {
@@ -1227,17 +1233,11 @@ namespace XIVLauncher.Windows.ViewModel
         {
             try
             {
-                if (AccountManager.CurrentAccount != null && AccountManager.CurrentAccount.UserName.Equals(username, StringComparison.Ordinal) &&
-                    AccountManager.CurrentAccount.Password != password &&
-                    AccountManager.CurrentAccount.SavePassword)
-                    AccountManager.UpdatePassword(AccountManager.CurrentAccount, password);
-
                 if (AccountManager.CurrentAccount == null ||
                     AccountManager.CurrentAccount.Id != $"{username}-{IsOtp}-{IsSteam}")
                 {
                     var accountToSave = new XivAccount(username)
                     {
-                        Password = password,
                         SavePassword = true,
                         UseOtp = IsOtp,
                         UseSteamServiceAccount = IsSteam
@@ -1247,18 +1247,37 @@ namespace XIVLauncher.Windows.ViewModel
 
                     AccountManager.CurrentAccount = accountToSave;
                 }
+
+                var currentAccount = AccountManager.CurrentAccount;
+
+                if (currentAccount.SavePassword && currentAccount.Password != password)
+                {
+                    AccountManager.UpdatePassword(currentAccount, password);
+                }
             }
             catch (Win32Exception ex)
             {
                 CustomMessageBox.Builder
-                                .NewFrom(Loc.Localize("PersistAccountError",
-                                                      "XIVLauncher could not save your account information. This is likely caused by having too many saved accounts in the Windows Credential Manager.\nPlease try removing some of them."))
-                                .WithAppendDescription(ex.ToString())
-                                .WithShowHelpLinks()
-                                .WithImage(MessageBoxImage.Warning)
-                                .WithButtons(MessageBoxButton.OK)
-                                .WithParentWindow(_window)
-                                .Show();
+                    .NewFrom(Loc.Localize("PersistPasswordError",
+                        "XIVLauncher could not save your password. This is likely caused by having too many saved accounts in the Windows Credential Manager.\nPlease try removing some of them. Your account was saved, but you will have to enter your password again next time."))
+                    .WithAppendDescription(ex.ToString())
+                    .WithShowHelpLinks()
+                    .WithImage(MessageBoxImage.Warning)
+                    .WithButtons(MessageBoxButton.OK)
+                    .WithParentWindow(_window)
+                    .Show();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                CustomMessageBox.Builder
+                    .NewFrom(Loc.Localize("PersistAccountListError",
+                        "XIVLauncher could not save your account list. You may have to enter your account information again next time.\nPlease make sure that XIVLauncher can write to its settings folder."))
+                    .WithAppendDescription(ex.ToString())
+                    .WithShowHelpLinks()
+                    .WithImage(MessageBoxImage.Warning)
+                    .WithButtons(MessageBoxButton.OK)
+                    .WithParentWindow(_window)
+                    .Show();
             }
         }
 

@@ -290,7 +290,7 @@ namespace XIVLauncher.Windows
                 App.Settings.AutologinEnabled = false;
             }
 
-            if ((App.Settings.AutologinEnabled || App.GlobalIsAutologin) && !App.GlobalIsDisableAutologin && savedAccount != null && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            if ((App.Settings.AutologinEnabled || App.GlobalIsAutologin) && !App.GlobalIsDisableAutologin && savedAccount is { SavePassword: true } && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
             {
                 Log.Information("Engaging Autologin...");
                 Model.TryLogin(savedAccount.UserName, savedAccount.Password,
@@ -579,8 +579,7 @@ namespace XIVLauncher.Windows
             Model.IsSteam = account.UseSteamServiceAccount;
             Model.IsAutoLogin = App.Settings.AutologinEnabled;
 
-            if (account.SavePassword)
-                LoginPassword.Password = account.Password;
+            LoginPassword.Password = account.SavePassword ? account.Password : string.Empty;
 
             if (saveAsCurrent)
             {
