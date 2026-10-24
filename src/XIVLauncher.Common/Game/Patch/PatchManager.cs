@@ -146,8 +146,8 @@ namespace XIVLauncher.Common.Game.Patch
 
         public void StartCancellation()
         {
-            this.CancelAllDownloads();
             this.IsCancelling = true;
+            this.CancelAllDownloads();
         }
 
         public async Task SetSpeedLimitAsync(long bytesPerSecond)
@@ -171,11 +171,17 @@ namespace XIVLauncher.Common.Game.Patch
 
             Actives[index] = download;
 
+            // Skip this patch immediately if it's already downloaded and checks out
             if (outFile.Exists && CheckPatchValidity(download.Patch, outFile) == HashCheckResult.Pass)
             {
-                download.State = PatchState.Downloaded;
-                Slots[index] = SlotState.Done;
-                Progresses[index] = download.Patch.Length;
+                lock (this.downloadFinalizationLock)
+                {
+                    download.State = PatchState.Downloaded;
+                    Slots[index] = SlotState.Done;
+                    Progresses[index] = 0;
+                    this.CheckIsDone();
+                }
+
                 return;
             }
 
@@ -204,7 +210,10 @@ namespace XIVLauncher.Common.Game.Patch
                 }
 
                 // Indicate "Checking..."
-                Slots[index] = SlotState.Checking;
+                lock (this.downloadFinalizationLock)
+                {
+                    Slots[index] = SlotState.Checking;
+                }
 
                 var checkResult = CheckPatchValidity(download.Patch, outFile);
 
@@ -282,17 +291,26 @@ namespace XIVLauncher.Common.Game.Patch
 
                 for (var i = 0; i < MAX_DOWNLOADS_AT_ONCE; i++)
                 {
-                    if (Slots[i] != SlotState.Done)
-                        continue;
+                    PatchDownload? toDl;
 
-                    Slots[i] = SlotState.InProgress;
+                    lock (this.downloadFinalizationLock)
+                    {
+                        if (Slots[i] != SlotState.Done)
+                        {
+                            continue;
+                        }
 
-                    var toDl = Downloads.FirstOrDefault(x => x.State == PatchState.Nothing);
+                        toDl = Downloads.FirstOrDefault(x => x.State == PatchState.Nothing);
 
-                    if (toDl == null)
-                        return;
+                        if (toDl == null)
+                        {
+                            return;
+                        }
 
-                    toDl.State = PatchState.IsDownloading;
+                        Slots[i] = SlotState.InProgress;
+                        toDl.State = PatchState.IsDownloading;
+                    }
+
                     var curIndex = i;
                     Task.Run(async () =>
                     {
