@@ -44,10 +44,12 @@ namespace XIVLauncher.Common.Game
             {
                 remoteIntegrity = await DownloadIntegrityCheckForVersion(client, Repository.Ffxiv.GetVer(gamePath), cancellationToken);
             }
-            catch (WebException e)
+            catch (HttpRequestException e)
             {
-                if (e.Response is HttpWebResponse resp && resp.StatusCode == HttpStatusCode.NotFound)
+                if (e.StatusCode == HttpStatusCode.NotFound)
+                {
                     return (CompareResult.ReferenceNotFound, null, null);
+                }
 
                 return (CompareResult.ReferenceFetchFailure, null, null);
             }
@@ -114,8 +116,10 @@ namespace XIVLauncher.Common.Game
 
         public static async Task<IntegrityCheckData> DownloadIntegrityCheckForVersion(HttpClient client, string gameVersion, CancellationToken cancellationToken = default)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, INTEGRITY_CHECK_BASE_URL + gameVersion + ".json");
-            var response = await client.SendAsync(request, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, INTEGRITY_CHECK_BASE_URL + gameVersion + ".json");
+            using var response = await client.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
             var result = JsonSerializer.Deserialize<IntegrityCheckData>(await response.Content.ReadAsStringAsync(cancellationToken));
             return result ?? throw new InvalidOperationException("Failed to deserialize integrity JSON");
         }
