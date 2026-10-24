@@ -138,6 +138,19 @@ namespace XIVLauncher.Common.Game.Patch
             OnFail?.Invoke();
         }
 
+        private bool HasProcessExited()
+        {
+            try
+            {
+                return this.process is { HasExited: true };
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[PATCHERIPC] Could not query patcher process");
+                return false;
+            }
+        }
+
         private bool TrySetBusy()
         {
             lock (this.stateLock)
@@ -172,11 +185,8 @@ namespace XIVLauncher.Common.Game.Patch
                     break;
 
                 case PatcherIpcOpCode.InstallFailed:
-                    State = InstallerState.Failed;
-                    OnFail?.Invoke();
-
-                    Stop();
-                    Environment.Exit(0);
+                    Log.Error("[PATCHERIPC] INSTALL FAILED");
+                    Fail();
                     break;
 
                 default:
@@ -201,6 +211,11 @@ namespace XIVLauncher.Common.Game.Patch
         {
             if (State == InstallerState.NotReady || State == InstallerState.NotStarted || State == InstallerState.Busy)
                 return;
+
+            if (HasProcessExited())
+            {
+                return;
+            }
 
             this.isStopping = true;
             this.rpc.SendMessage(new PatcherIpcEnvelope

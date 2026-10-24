@@ -141,7 +141,7 @@ namespace XIVLauncher.Common.Game.Patch
                 Task.Run(RunApplyQueue, _cancelTokenSource.Token),
             }).ConfigureAwait(false);
 
-            return !this.IsCancelling;
+            return !this.IsCancelling && this.installer.State != PatchInstaller.InstallerState.Failed;
         }
 
         public void StartCancellation()
@@ -188,22 +188,10 @@ namespace XIVLauncher.Common.Game.Patch
 
             acquisitionTask.Complete += (_, args) =>
             {
-                void HandleError(string context)
-                {
-                    if (Interlocked.Exchange(ref this.hasError, 1) == 1)
-                    {
-                        return;
-                    }
-
-                    this.IsCancelling = true;
-                    CancelAllDownloads();
-                    OnFail?.Invoke(download.Patch, context);
-                }
-
                 if (args == AcquisitionResult.Error)
                 {
                     Log.Error("Download failed for {VersionId}", download.Patch.VersionId);
-                    HandleError("Download");
+                    HandleError(download.Patch, "Download");
                     return;
                 }
 
@@ -224,7 +212,7 @@ namespace XIVLauncher.Common.Game.Patch
                 if (checkResult != HashCheckResult.Pass)
                 {
                     Log.Error("CheckPatchValidity failed with {Result} for {VersionId} after DL", checkResult, download.Patch.VersionId);
-                    HandleError($"ValidityCheck ({checkResult})");
+                    HandleError(download.Patch, $"ValidityCheck ({checkResult})");
                     return;
                 }
 
@@ -244,6 +232,18 @@ namespace XIVLauncher.Common.Game.Patch
             this.AcquisitionTasks[index] = acquisitionTask;
 
             await acquisitionTask.StartAsync();
+        }
+
+        private void HandleError(PatchListEntry patch, string context)
+        {
+            if (Interlocked.Exchange(ref this.hasError, 1) == 1)
+            {
+                return;
+            }
+
+            this.IsCancelling = true;
+            CancelAllDownloads();
+            OnFail?.Invoke(patch, context);
         }
 
         private void CancelAllDownloads()
@@ -303,7 +303,7 @@ namespace XIVLauncher.Common.Game.Patch
                         catch (Exception ex)
                         {
                             Log.Error(ex, "Exception in DownloadPatchAsync");
-                            throw;
+                            HandleError(toDl.Patch, $"Exception ({ex.GetType().Name})");
                         }
                     });
                 }
