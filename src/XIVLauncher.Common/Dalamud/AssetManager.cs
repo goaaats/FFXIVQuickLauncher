@@ -106,12 +106,19 @@ namespace XIVLauncher.Common.Dalamud
                 if (File.Exists(tempPath))
                     File.Delete(tempPath);
 
-                await updater.DownloadFile(packageUrl, tempPath);
-
-                using (var packageStream = File.OpenRead(tempPath))
-                using (var packageArc = new ZipArchive(packageStream, ZipArchiveMode.Read))
+                try
                 {
-                    packageArc.ExtractToDirectory(currentDir.FullName);
+                    await updater.DownloadFile(packageUrl, tempPath);
+
+                    using (var packageStream = File.OpenRead(tempPath))
+                    using (var packageArc = new ZipArchive(packageStream, ZipArchiveMode.Read))
+                    {
+                        packageArc.ExtractToDirectory(currentDir.FullName);
+                    }
+                }
+                finally
+                {
+                    PlatformHelpers.DeleteTempFile(tempPath);
                 }
 
                 try
@@ -123,8 +130,6 @@ namespace XIVLauncher.Common.Dalamud
                 {
                     Log.Error(ex, "[DASSET] Could not copy to dev dir");
                 }
-
-                File.Delete(tempPath);
             }
 
             if (isRefreshNeeded)

@@ -25,6 +25,8 @@ namespace XIVLauncher.Common.Dalamud
 
         private readonly ManualResetEventSlim updateFinished = new(false);
 
+        private static readonly TimeSpan RetryBackoff = TimeSpan.FromSeconds(10);
+
         public DownloadState State { get; private set; } = DownloadState.Unknown;
         public bool IsStaging { get; private set; } = false;
 
@@ -148,8 +150,14 @@ namespace XIVLauncher.Common.Dalamud
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "[DUPDATE] Update failed, try {TryCnt}/{MaxTries}...", tries, MAX_TRIES);
+                        Log.Error(ex, "[DUPDATE] Update failed, try {TryCnt}/{MaxTries}...", tries + 1, MAX_TRIES);
                         this.EnsurementException = ex;
+                    }
+
+                    // No wait after the last try
+                    if (tries < MAX_TRIES - 1)
+                    {
+                        await Task.Delay(RetryBackoff).ConfigureAwait(false);
                     }
                 }
 
@@ -469,10 +477,15 @@ namespace XIVLauncher.Common.Dalamud
             if (File.Exists(downloadPath))
                 File.Delete(downloadPath);
 
-            await this.DownloadFile(version.DownloadUrl, downloadPath).ConfigureAwait(false);
-            ZipFile.ExtractToDirectory(downloadPath, addonPath.FullName);
-
-            File.Delete(downloadPath);
+            try
+            {
+                await this.DownloadFile(version.DownloadUrl, downloadPath).ConfigureAwait(false);
+                ZipFile.ExtractToDirectory(downloadPath, addonPath.FullName);
+            }
+            finally
+            {
+                PlatformHelpers.DeleteTempFile(downloadPath);
+            }
 
             try
             {
@@ -558,13 +571,18 @@ namespace XIVLauncher.Common.Dalamud
             if (File.Exists(downloadPath))
                 File.Delete(downloadPath);
 
-            await this.DownloadFile(dotnetUrl, downloadPath).ConfigureAwait(false);
-            ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName);
+            try
+            {
+                await this.DownloadFile(dotnetUrl, downloadPath).ConfigureAwait(false);
+                ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName);
 
-            await this.DownloadFile(desktopUrl, downloadPath).ConfigureAwait(false);
-            ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName);
-
-            File.Delete(downloadPath);
+                await this.DownloadFile(desktopUrl, downloadPath).ConfigureAwait(false);
+                ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName);
+            }
+            finally
+            {
+                PlatformHelpers.DeleteTempFile(downloadPath);
+            }
         }
 
         public async Task DownloadFile(string url, string path)

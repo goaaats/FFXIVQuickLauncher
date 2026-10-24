@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using Serilog;
 
 namespace XIVLauncher.Common.Util;
 
@@ -32,6 +33,22 @@ public static class PlatformHelpers
     {
         // https://stackoverflow.com/a/50413126
         return Path.Combine(Path.GetTempPath(), "xivlauncher_" + Guid.NewGuid());
+    }
+
+    /// <summary>
+    ///     Deletes a temporary file without throwing, for use in finally blocks.
+    /// </summary>
+    /// <param name="path">The file to delete. May not exist.</param>
+    public static void DeleteTempFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not delete temp file {Path}", path);
+        }
     }
 
     public static void DeleteAndRecreateDirectory(DirectoryInfo dir)
