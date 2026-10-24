@@ -165,23 +165,36 @@ namespace XIVLauncher.Common.Game.Patch
             }
         }
 
+        private void TrySetReady()
+        {
+            lock (this.stateLock)
+            {
+                if (State == InstallerState.Failed)
+                {
+                    return;
+                }
+
+                State = InstallerState.Ready;
+            }
+        }
+
         private void RemoteCallHandler(PatcherIpcEnvelope envelope)
         {
             switch (envelope.OpCode)
             {
                 case PatcherIpcOpCode.Hello:
                     Log.Information("[PATCHERIPC] GOT HELLO");
-                    State = InstallerState.Ready;
+                    TrySetReady();
                     break;
 
                 case PatcherIpcOpCode.InstallOk:
                     Log.Information("[PATCHERIPC] INSTALL OK");
-                    State = InstallerState.Ready;
+                    TrySetReady();
                     break;
 
                 case PatcherIpcOpCode.Finish:
                     Log.Information("[PATCHERIPC] INSTALL FINISH");
-                    State = InstallerState.Ready;
+                    TrySetReady();
                     break;
 
                 case PatcherIpcOpCode.InstallFailed:
@@ -231,7 +244,7 @@ namespace XIVLauncher.Common.Game.Patch
                 return;
             }
 
-            this.rpc.SendMessage(new PatcherIpcEnvelope
+            var sent = this.rpc.SendMessage(new PatcherIpcEnvelope
             {
                 OpCode = PatcherIpcOpCode.StartInstall,
                 Data = new PatcherIpcStartInstall
@@ -243,6 +256,11 @@ namespace XIVLauncher.Common.Game.Patch
                     KeepPatch = keepPatches,
                 }
             });
+
+            if (!sent)
+            {
+                Fail();
+            }
         }
 
         public void FinalizeAndWait(DirectoryInfo gameDirectory)
@@ -252,11 +270,17 @@ namespace XIVLauncher.Common.Game.Patch
                 return;
             }
 
-            this.rpc.SendMessage(new PatcherIpcEnvelope
+            var sent = this.rpc.SendMessage(new PatcherIpcEnvelope
             {
                 OpCode = PatcherIpcOpCode.Finish,
                 Data = gameDirectory.ToString()
             });
+
+            if (!sent)
+            {
+                Fail();
+                return;
+            }
 
             var cts = new CancellationTokenSource(5000);
 
