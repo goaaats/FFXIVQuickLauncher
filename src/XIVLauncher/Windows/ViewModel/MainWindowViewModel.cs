@@ -538,14 +538,16 @@ namespace XIVLauncher.Windows.ViewModel
                 else if (ex is HttpRequestException || ex is TaskCanceledException || ex is WebException)
                 {
                     msgbox.WithText(Loc.Localize("LoginWebExceptionContent",
-                        "XIVLauncher could not establish a connection to the game servers.\n\nThis may be a temporary issue, or a problem with your internet connection. Please try again later."));
+                        "XIVLauncher could not establish a connection to the game servers.\n\nThis may be a temporary issue, or a problem with your internet connection. Please try again later.\n\nYou can learn more about outages on the Lodestone."))
+                        .WithShowOfficialLauncher();
                 }
                 else if (ex is InvalidResponseException iex)
                 {
                     Log.Error("Invalid response from server! Context: {Message}\n{Document}", ex.Message, iex.Document);
 
                     msgbox.WithText(Loc.Localize("LoginGenericServerIssue",
-                        "The server has sent an invalid response. This is known to occur during outages or when servers are under heavy load.\nPlease wait a minute and try again, or try using the official launcher.\n\nYou can learn more about outages on the Lodestone."));
+                        "The server has sent an invalid response. This is known to occur during outages or when servers are under heavy load.\nPlease wait a minute and try again, or try using the official launcher.\n\nYou can learn more about outages on the Lodestone."))
+                        .WithShowOfficialLauncher();
                 }
                 // Actual unexpected error; show error details
                 else
@@ -1280,7 +1282,12 @@ namespace XIVLauncher.Windows.ViewModel
                 catch (Exception ex)
                 {
                     Log.Error(ex, "Unable to check boot version");
-                    CustomMessageBox.Show(Loc.Localize("CheckBootVersionError", "XIVLauncher was not able to check the boot version for the select game installation. This can happen if a maintenance is currently in progress or if your connection to the version check server is not available. Please report this error if you are able to login with the official launcher, but not XIVLauncher."), "XIVLauncher", MessageBoxButton.OK, MessageBoxImage.Error, parentWindow: _window, showOfficialLauncher: true);
+                    CustomMessageBox.Show(Loc.Localize("CheckBootVersionError", "XIVLauncher was not able to check the version for the select game installation.\n\nThis can happen if a maintenance is currently in progress or if your connection to the version check server is not available. Please report this error if you are able to login with the official launcher, but not XIVLauncher.\n\nYou can learn more about outages on the Lodestone."),
+                        "XIVLauncher",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error,
+                        parentWindow: _window,
+                        showOfficialLauncher: true);
 
                     return false;
                 }
