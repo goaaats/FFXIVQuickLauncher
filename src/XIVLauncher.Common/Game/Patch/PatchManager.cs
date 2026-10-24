@@ -44,7 +44,7 @@ namespace XIVLauncher.Common.Game.Patch
         private readonly Launcher launcher;
         private readonly string sid;
 
-        private readonly Mutex downloadFinalizationLock = new Mutex();
+        private readonly object downloadFinalizationLock = new();
 
         public readonly IReadOnlyList<PatchDownload> Downloads;
 
@@ -73,7 +73,7 @@ namespace XIVLauncher.Common.Game.Patch
 
         public long AllDownloadsLength => GetDownloadLength();
 
-        private bool hasError = false;
+        private int hasError;
 
         public event Action<PatchListEntry, string>? OnFail;
 
@@ -190,11 +190,12 @@ namespace XIVLauncher.Common.Game.Patch
             {
                 void HandleError(string context)
                 {
-                    if (this.hasError)
+                    if (Interlocked.Exchange(ref this.hasError, 1) == 1)
+                    {
                         return;
+                    }
 
-                    this.hasError = true;
-
+                    this.IsCancelling = true;
                     CancelAllDownloads();
                     OnFail?.Invoke(download.Patch, context);
                 }
@@ -219,8 +220,6 @@ namespace XIVLauncher.Common.Game.Patch
 
                 var checkResult = CheckPatchValidity(download.Patch, outFile);
 
-                this.downloadFinalizationLock.WaitOne();
-
                 // Let's just bail for now, need better handling of this later
                 if (checkResult != HashCheckResult.Pass)
                 {
@@ -229,15 +228,17 @@ namespace XIVLauncher.Common.Game.Patch
                     return;
                 }
 
-                download.State = PatchState.Downloaded;
-                Slots[index] = SlotState.Done;
-                Progresses[index] = 0;
-                Speeds[index] = 0;
+                lock (this.downloadFinalizationLock)
+                {
+                    download.State = PatchState.Downloaded;
+                    Slots[index] = SlotState.Done;
+                    Progresses[index] = 0;
+                    Speeds[index] = 0;
 
-                Log.Information("Patch at {0} downloaded completely", download.Patch.Url);
+                    Log.Information("Patch at {0} downloaded completely", download.Patch.Url);
 
-                this.CheckIsDone();
-                this.downloadFinalizationLock.ReleaseMutex();
+                    this.CheckIsDone();
+                }
             };
 
             this.AcquisitionTasks[index] = acquisitionTask;
@@ -357,14 +358,17 @@ namespace XIVLauncher.Common.Game.Patch
 
                 this.installer.StartInstall(this.gamePath, GetPatchFile(toInstall.Patch), toInstall.Patch);
 
-                while (this.installer.State != PatchInstaller.InstallerState.Ready)
+                while (this.installer.State == PatchInstaller.InstallerState.Busy)
                 {
                     Thread.Sleep(100);
                 }
 
-                // TODO need to handle this better
+                // Stop the download queue to make sure that PatchAsync completes
                 if (this.installer.State == PatchInstaller.InstallerState.Failed)
+                {
+                    this.IsCancelling = true;
                     return;
+                }
 
                 Log.Information($"Patch at {CurrentInstallIndex} installed");
 

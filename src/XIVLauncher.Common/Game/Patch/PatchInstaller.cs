@@ -18,6 +18,12 @@ namespace XIVLauncher.Common.Game.Patch
 
         private RemotePatchInstaller? internalPatchInstaller;
 
+        private Process? process;
+
+        private readonly object stateLock = new();
+
+        private bool isStopping;
+
         public enum InstallerState
         {
             NotStarted,
@@ -67,13 +73,15 @@ namespace XIVLauncher.Common.Game.Patch
 
                 try
                 {
-                    Process.Start(startInfo);
+                    this.process = Process.Start(startInfo);
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "Could not launch Patch Installer");
                     throw new PatchInstallerException("Start failed.", ex);
                 }
+
+                WatchProcess();
             }
             else
             {
@@ -82,6 +90,65 @@ namespace XIVLauncher.Common.Game.Patch
 
                 this.internalPatchInstaller = new RemotePatchInstaller(new InProcessRpc(rpcName));
                 this.internalPatchInstaller.Start();
+            }
+        }
+
+        private void WatchProcess()
+        {
+            if (this.process == null)
+            {
+                return;
+            }
+
+            try
+            {
+                this.process.Exited += OnProcessExited;
+                this.process.EnableRaisingEvents = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[PATCHERIPC] Could not watch patcher process");
+            }
+        }
+
+        private void OnProcessExited(object? sender, EventArgs e)
+        {
+            // Exiting is fine if we asked for it
+            if (this.isStopping || State is InstallerState.NotStarted or InstallerState.NotReady)
+            {
+                return;
+            }
+
+            Log.Error("[PATCHERIPC] Patcher exited unexpectedly");
+            Fail();
+        }
+
+        private void Fail()
+        {
+            lock (this.stateLock)
+            {
+                if (State == InstallerState.Failed)
+                {
+                    return;
+                }
+
+                State = InstallerState.Failed;
+            }
+
+            OnFail?.Invoke();
+        }
+
+        private bool TrySetBusy()
+        {
+            lock (this.stateLock)
+            {
+                if (State == InstallerState.Failed)
+                {
+                    return false;
+                }
+
+                State = InstallerState.Busy;
+                return true;
             }
         }
 
@@ -135,6 +202,7 @@ namespace XIVLauncher.Common.Game.Patch
             if (State == InstallerState.NotReady || State == InstallerState.NotStarted || State == InstallerState.Busy)
                 return;
 
+            this.isStopping = true;
             this.rpc.SendMessage(new PatcherIpcEnvelope
             {
                 OpCode = PatcherIpcOpCode.Bye
@@ -143,7 +211,11 @@ namespace XIVLauncher.Common.Game.Patch
 
         public void StartInstall(DirectoryInfo gameDirectory, FileInfo file, PatchListEntry patch)
         {
-            State = InstallerState.Busy;
+            if (!TrySetBusy())
+            {
+                return;
+            }
+
             this.rpc.SendMessage(new PatcherIpcEnvelope
             {
                 OpCode = PatcherIpcOpCode.StartInstall,
@@ -160,7 +232,11 @@ namespace XIVLauncher.Common.Game.Patch
 
         public void FinalizeAndWait(DirectoryInfo gameDirectory)
         {
-            State = InstallerState.Busy;
+            if (!TrySetBusy())
+            {
+                return;
+            }
+
             this.rpc.SendMessage(new PatcherIpcEnvelope
             {
                 OpCode = PatcherIpcOpCode.Finish,
@@ -169,7 +245,7 @@ namespace XIVLauncher.Common.Game.Patch
 
             var cts = new CancellationTokenSource(5000);
 
-            while (this.State != InstallerState.Ready)
+            while (this.State == InstallerState.Busy)
             {
                 Thread.Sleep(100);
 
