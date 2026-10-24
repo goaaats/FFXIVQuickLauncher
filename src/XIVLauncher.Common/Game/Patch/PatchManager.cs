@@ -428,6 +428,7 @@ namespace XIVLauncher.Common.Game.Patch
             CannotParse,
             CrcMismatch,
             UnknownHashType,
+            BadHashList,
         }
 
         private static HashCheckResult CheckPatchValidity(PatchListEntry patchListEntry, FileInfo path)
@@ -471,23 +472,31 @@ namespace XIVLauncher.Common.Game.Patch
                 return HashCheckResult.BadLength;
             }
 
-            var parts = (int)Math.Ceiling((double)patchListEntry.Length / patchListEntry.HashBlockSize);
-            var block = new byte[patchListEntry.HashBlockSize];
+            // Boot patches don't have hashes but they never get here because they don't set a hash type
+            if (patchListEntry.HashBlockSize <= 0 || patchListEntry.Hashes == null)
+            {
+                Log.Error("Patch list has no hashes for {VersionId}", patchListEntry.VersionId);
+                return HashCheckResult.BadHashList;
+            }
+
+            var blockSize = (int)patchListEntry.HashBlockSize;
+            var parts = (int)Math.Ceiling((double)patchListEntry.Length / blockSize);
+
+            if (patchListEntry.Hashes.Length != parts)
+            {
+                Log.Error("Patch list has {Count} hashes for {Parts} blocks of {VersionId}", patchListEntry.Hashes.Length, parts, patchListEntry.VersionId);
+                return HashCheckResult.BadHashList;
+            }
+
+            var block = new byte[blockSize];
 
             for (var i = 0; i < parts; i++)
             {
-                var read = stream.Read(block, 0, (int)patchListEntry.HashBlockSize);
-
-                if (read < patchListEntry.HashBlockSize)
-                {
-                    var trimmedBlock = new byte[read];
-                    Array.Copy(block, 0, trimmedBlock, 0, read);
-                    block = trimmedBlock;
-                }
+                var read = stream.ReadAtLeast(block, blockSize, throwOnEndOfStream: false);
 
                 using var sha1 = SHA1.Create();
 
-                var hash = sha1.ComputeHash(block);
+                var hash = sha1.ComputeHash(block, 0, read);
                 var sb = new StringBuilder(hash.Length * 2);
 
                 foreach (var b in hash)
