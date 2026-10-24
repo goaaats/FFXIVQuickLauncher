@@ -27,7 +27,47 @@ namespace XIVLauncher.Common.Dalamud
 
         private static readonly TimeSpan RetryBackoff = TimeSpan.FromSeconds(10);
 
-        public DownloadState State { get; private set; } = DownloadState.Unknown;
+        private readonly object runLock = new();
+        private bool isRunning;
+
+        private (string? BetaKind, string? BetaKey)? pendingRun;
+
+        public event Action<DownloadState>? StateChanged;
+
+        public event Action? PendingRunChanged;
+
+        public string? PendingBetaKind
+        {
+            get
+            {
+                lock (this.runLock)
+                {
+                    return this.pendingRun?.BetaKind;
+                }
+            }
+        }
+
+        public DownloadState State
+        {
+            get;
+            private set
+            {
+                if (field == value)
+                    return;
+
+                field = value;
+
+                try
+                {
+                    StateChanged?.Invoke(field);
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+        } = DownloadState.Unknown;
+
         public bool IsStaging { get; private set; } = false;
 
         public Exception? EnsurementException { get; private set; }
@@ -126,44 +166,118 @@ namespace XIVLauncher.Common.Dalamud
             Overlay!.ReportProgress(size, downloaded, progress);
         }
 
+        /// <summary>
+        /// Start updating to the given branch. While an update runs, the request is buffered and started once that update ends.
+        /// </summary>
         public void Run(string? betaKind, string? betaKey)
         {
-            Log.Information("[DUPDATE] Starting...");
-            this.State = DownloadState.Running;
-            this.updateFinished.Reset();
+            var isQueued = false;
 
-            this.ResolvedBranch = null;
-
-            Task.Run(async () =>
+            lock (this.runLock)
             {
-                const int MAX_TRIES = 10;
-
-                var isUpdated = false;
-
-                for (var tries = 0; tries < MAX_TRIES; tries++)
+                if (this.isRunning)
                 {
-                    try
+                    Log.Information("[DUPDATE] Update running, queueing {Kind}", betaKind);
+                    this.pendingRun = (betaKind, betaKey);
+                    isQueued = true;
+                }
+                else
+                {
+                    Log.Information("[DUPDATE] Starting...");
+                    this.isRunning = true;
+                    this.State = DownloadState.Running;
+                    this.updateFinished.Reset();
+                }
+            }
+
+            if (isQueued)
+            {
+                this.RaisePendingRunChanged();
+                return;
+            }
+
+            Task.Run(() => this.RunQueue(betaKind, betaKey));
+        }
+
+        private void RaisePendingRunChanged()
+        {
+            try
+            {
+                PendingRunChanged?.Invoke();
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+
+        private async Task RunQueue(string? betaKind, string? betaKey)
+        {
+            while (true)
+            {
+                this.ResolvedBranch = null;
+                this.IsStaging = false;
+                this.EnsurementException = null;
+
+                var isUpdated = await this.TryUpdate(betaKind, betaKey).ConfigureAwait(false);
+
+                lock (this.runLock)
+                {
+                    if (this.pendingRun is not { } next)
                     {
-                        await UpdateDalamud(betaKind, betaKey).ConfigureAwait(true);
-                        isUpdated = true;
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "[DUPDATE] Update failed, try {TryCnt}/{MaxTries}...", tries + 1, MAX_TRIES);
-                        this.EnsurementException = ex;
+                        this.isRunning = false;
+                        this.State = isUpdated ? DownloadState.Done : DownloadState.NoIntegrity;
+                        this.updateFinished.Set();
+                        return;
                     }
 
-                    // No wait after the last try
-                    if (tries < MAX_TRIES - 1)
-                    {
-                        await Task.Delay(RetryBackoff).ConfigureAwait(false);
-                    }
+                    this.pendingRun = null;
+                    (betaKind, betaKey) = next;
                 }
 
-                this.State = isUpdated ? DownloadState.Done : DownloadState.NoIntegrity;
-                this.updateFinished.Set();
-            });
+                Log.Information("[DUPDATE] Starting queued update for {Kind}", betaKind);
+                this.RaisePendingRunChanged();
+            }
+        }
+
+        private async Task<bool> TryUpdate(string? betaKind, string? betaKey)
+        {
+            const int MAX_TRIES = 10;
+
+            for (var tries = 0; tries < MAX_TRIES; tries++)
+            {
+                try
+                {
+                    await UpdateDalamud(betaKind, betaKey).ConfigureAwait(true);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[DUPDATE] Update failed, try {TryCnt}/{MaxTries}...", tries + 1, MAX_TRIES);
+                    this.EnsurementException = ex;
+                }
+
+                if (this.HasPendingRun())
+                {
+                    return false;
+                }
+
+                // No wait after the last try
+                if (tries < MAX_TRIES - 1)
+                {
+                    await Task.Delay(RetryBackoff).ConfigureAwait(false);
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasPendingRun()
+        {
+            lock (this.runLock)
+            {
+                return this.pendingRun != null;
+            }
         }
 
         public void WaitForUpdate()
