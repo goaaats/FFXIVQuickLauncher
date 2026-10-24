@@ -304,13 +304,13 @@ namespace XIVLauncher.Common.Dalamud
 
         private async Task<(DalamudVersionInfo? release, DalamudVersionInfo? staging)> GetVersionInfo(string? betaKind, string? betaKey)
         {
-            var message = new HttpRequestMessage(HttpMethod.Get, DalamudLauncher.REMOTE_BASE + $"release&bucket={this.RolloutBucket}");
+            using var message = new HttpRequestMessage(HttpMethod.Get, DalamudLauncher.REMOTE_BASE + $"release&bucket={this.RolloutBucket}");
             message.Headers.CacheControl = new CacheControlHeaderValue
             {
                 NoCache = true
             };
 
-            var versionInfoResponse = await this.client.SendAsync(message).ConfigureAwait(false);
+            using var versionInfoResponse = await this.client.SendAsync(message).ConfigureAwait(false);
             versionInfoResponse.EnsureSuccessStatusCode();
 
             var versionInfoRelease = JsonConvert.DeserializeObject<DalamudVersionInfo>(await versionInfoResponse.Content.ReadAsStringAsync());
