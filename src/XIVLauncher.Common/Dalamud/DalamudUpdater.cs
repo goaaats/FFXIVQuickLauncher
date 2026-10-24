@@ -318,6 +318,8 @@ namespace XIVLauncher.Common.Dalamud
                         throw new DalamudIntegrityException("Could not ensure runtime", ex);
                     }
                 }
+
+                CleanUpOldRuntimes(runtimePaths);
             }
 
             Log.Verbose("[DUPDATE] Now ensure assets...");
@@ -459,6 +461,39 @@ namespace XIVLauncher.Common.Dalamud
             }
         }
 
+        private static void CleanUpOldRuntimes(DirectoryInfo[] currentRuntimePaths)
+        {
+            if (GameHelpers.CheckIsGameOpen())
+            {
+                return;
+            }
+
+            foreach (var current in currentRuntimePaths)
+            {
+                if (current.Parent is not { Exists: true } versionsDir)
+                {
+                    continue;
+                }
+
+                foreach (var directory in versionsDir.GetDirectories())
+                {
+                    if (directory.Name == current.Name)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        directory.Delete(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "[DUPDATE] Could not clean up old runtime {Path}", directory.FullName);
+                    }
+                }
+            }
+        }
+
         private static void WriteVersionJson(DirectoryInfo addonPath, string info)
         {
             File.WriteAllText(Path.Combine(addonPath.FullName, "version.json"), info);
@@ -468,7 +503,14 @@ namespace XIVLauncher.Common.Dalamud
         {
             // Ensure directory exists
             if (addonPath.Exists)
+            {
+                if (GameHelpers.CheckIsGameOpen())
+                {
+                    throw new DalamudIntegrityException("Cannot replace Dalamud while the game is running");
+                }
+
                 addonPath.Delete(true);
+            }
 
             addonPath.Create();
 
@@ -554,6 +596,10 @@ namespace XIVLauncher.Common.Dalamud
             {
                 runtimePath.Create();
             }
+            else if (GameHelpers.CheckIsGameOpen())
+            {
+                Log.Information("[DUPDATE] Installing runtime {Version} side by side", version);
+            }
             else
             {
                 runtimePath.Delete(true);
@@ -574,10 +620,10 @@ namespace XIVLauncher.Common.Dalamud
             try
             {
                 await this.DownloadFile(dotnetUrl, downloadPath).ConfigureAwait(false);
-                ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName);
+                ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName, overwriteFiles: true);
 
                 await this.DownloadFile(desktopUrl, downloadPath).ConfigureAwait(false);
-                ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName);
+                ZipFile.ExtractToDirectory(downloadPath, runtimePath.FullName, overwriteFiles: true);
             }
             finally
             {

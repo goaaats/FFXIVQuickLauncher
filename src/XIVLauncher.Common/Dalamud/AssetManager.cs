@@ -94,6 +94,11 @@ namespace XIVLauncher.Common.Dalamud
 
             if (isRefreshNeeded)
             {
+                if (currentDir.Exists && GameHelpers.CheckIsGameOpen())
+                {
+                    throw new DalamudIntegrityException("Cannot replace assets while the game is running");
+                }
+
                 PlatformHelpers.DeleteAndRecreateDirectory(currentDir);
 
                 // Wait for it to be gone
