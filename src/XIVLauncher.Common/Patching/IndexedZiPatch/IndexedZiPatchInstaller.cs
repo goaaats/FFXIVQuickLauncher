@@ -1,13 +1,9 @@
 ﻿using Serilog;
 using System;
 using System.Collections.Generic;
-
-#if WINDOWS
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-#endif
-
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -55,7 +51,6 @@ public class IndexedZiPatchInstaller : IDisposable
     // Definitions taken from PInvoke.net (with some changes)
     // ReSharper disable InconsistentNaming
 
-#if WINDOWS
     private static class PInvoke
     {
         #region Constants
@@ -171,7 +166,6 @@ public class IndexedZiPatchInstaller : IDisposable
         #endregion
     }
     // ReSharper restore once InconsistentNaming
-#endif
 
     public IndexedZiPatchInstaller(IndexedZiPatchIndex def)
     {
@@ -347,14 +341,13 @@ public class IndexedZiPatchInstaller : IDisposable
             stream.Seek(file.FileSize, SeekOrigin.Begin);
             stream.SetLength(file.FileSize);
 
-#if WINDOWS
             if (useSetFileValidData
+                && OperatingSystem.IsWindows()
                 && stream.SafeFileHandle is { } sfh
                 && !PInvoke.SetFileValidData(sfh.DangerousGetHandle(), file.FileSize))
             {
                 Log.Information($"Unable to apply SetFileValidData on file {fileInfo.FullName} (error code {Marshal.GetLastWin32Error()})");
             }
-#endif
         }
 
         this.targetStreams[targetIndex] = stream;
@@ -379,21 +372,7 @@ public class IndexedZiPatchInstaller : IDisposable
     {
         Dispose();
 
-#if WINDOWS
-        var useSetFileValidData = true;
-
-        try
-        {
-            PInvoke.SetCurrentPrivilege("SeManageVolumePrivilege", true);
-        }
-        catch (Win32Exception e)
-        {
-            Log.Information(e, "Unable to obtain SeManageVolumePrivilege; not using SetFileValidData.");
-            useSetFileValidData = false;
-        }
-#else
-            var useSetFileValidData = false;
-#endif
+        var useSetFileValidData = OperatingSystem.IsWindows() && TryEnableManageVolume();
 
         for (var i = 0; i < Index.Length; i++)
         {
@@ -403,6 +382,20 @@ public class IndexedZiPatchInstaller : IDisposable
             var file = Index[i];
             var fileInfo = new FileInfo(Path.Combine(rootPath, file.RelativePath));
             SetTargetStreamForWriteFromFile(i, fileInfo, useSetFileValidData);
+        }
+    }
+
+    private static bool TryEnableManageVolume()
+    {
+        try
+        {
+            PInvoke.SetCurrentPrivilege("SeManageVolumePrivilege", true);
+            return true;
+        }
+        catch (Win32Exception e)
+        {
+            Log.Information(e, "Unable to obtain SeManageVolumePrivilege; not using SetFileValidData.");
+            return false;
         }
     }
 

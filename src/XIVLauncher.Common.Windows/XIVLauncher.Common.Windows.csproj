@@ -20,6 +20,12 @@
       <ProjectReference Include="..\XIVLauncher.Common\XIVLauncher.Common.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+            <_Parameter1>windows</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
     <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Release'">
         <AppOutputBase>$(MSBuildProjectDirectory)\</AppOutputBase>
         <PathMap>$(AppOutputBase)=C:\goatsoft\xl\XIVLauncher.Common.Windows\</PathMap>

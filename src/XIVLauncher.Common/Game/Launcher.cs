@@ -257,7 +257,7 @@ public class Launcher
         var workingDir = Path.Combine(gamePath.FullName, "game");
 
         var arguments = encryptArguments
-            ? argumentBuilder.BuildEncrypted()
+            ? argumentBuilder.BuildEncryptedFromTicks(runner.GetTickCount())
             : argumentBuilder.Build();
 
         return runner.Start(exePath, workingDir, arguments, environment, dpiAwareness, additionalInjectorArgs);

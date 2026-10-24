@@ -100,17 +100,17 @@ public static class PlatformHelpers
 
     public static bool IsElevated()
     {
-        switch (Environment.OSVersion.Platform)
+        if (OperatingSystem.IsWindows())
         {
-            case PlatformID.Win32NT:
-                return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
-
-            case PlatformID.Unix:
-                return geteuid() == 0;
-
-            default:
-                return false;
+            return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
         }
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            return geteuid() == 0;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -186,7 +186,6 @@ public static class PlatformHelpers
         return ((IPEndPoint)socket.LocalEndPoint).Port;
     }
 
-#if WINDOWS
     /*
      * WINE: The APIs DriveInfo uses are buggy on Wine. Let's just use the kernel32 API instead.
      */
@@ -205,6 +204,11 @@ public static class PlatformHelpers
             throw new ArgumentNullException(nameof(info));
         }
 
+        if (!OperatingSystem.IsWindows())
+        {
+            return new DriveInfo(info.FullName).AvailableFreeSpace;
+        }
+
         ulong dummy = 0;
 
         if (!GetDiskFreeSpaceEx(info.FullName, out ulong freeSpace, out dummy, out dummy))
@@ -214,17 +218,4 @@ public static class PlatformHelpers
 
         return (long)freeSpace;
     }
-#else
-        public static long GetDiskFreeSpace(DirectoryInfo info)
-        {
-            if (info == null)
-            {
-                throw new ArgumentNullException(nameof(info));
-            }
-
-            DriveInfo drive = new DriveInfo(info.FullName);
-
-            return drive.AvailableFreeSpace;
-        }
-#endif
 }
