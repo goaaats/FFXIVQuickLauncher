@@ -160,9 +160,9 @@ namespace XIVLauncher.Common.Dalamud
         }
 
         /// <summary>
-        ///     Check if an asset update is needed. When this fails, just return false - the route to github
-        ///     might be bad, don't wanna just bail out in that case
+        ///     Check if an asset update is needed.
         /// </summary>
+        /// <exception cref="Exception">The remote asset info could not be fetched or parsed.</exception>
         /// <param name="client"><see cref="HttpClient"/> to use for download</param>
         /// <param name="baseDir">Base directory for assets</param>
         /// <returns>Update state</returns>
