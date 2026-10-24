@@ -243,6 +243,12 @@ namespace XIVLauncher.Common.Game.Patch
 
             this.AcquisitionTasks[index] = acquisitionTask;
 
+            if (this.IsCancelling)
+            {
+                Log.Information("Patching cancelled, not starting download of {VersionId}", download.Patch.VersionId);
+                return;
+            }
+
             await acquisitionTask.StartAsync();
         }
 
