@@ -138,6 +138,23 @@ namespace XIVLauncher.Common.Game.Patch
             OnFail?.Invoke();
         }
 
+        // This should only ever be called last-resort style, since it can leave patches half-installed
+        internal void Abort()
+        {
+            Log.Error("[PATCHERIPC] Aborting patcher");
+
+            try
+            {
+                this.process?.Kill();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[PATCHERIPC] Could not kill patcher");
+            }
+
+            Fail();
+        }
+
         private bool HasProcessExited()
         {
             try
@@ -290,8 +307,9 @@ namespace XIVLauncher.Common.Game.Patch
 
                 if (cts.Token.IsCancellationRequested)
                 {
+                    // Fail() instead of only OnFail: leaving Busy made Stop() skip Bye, so the patcher lingered
                     Log.Error("Timeout waiting for installer to finish after finishing install.");
-                    OnFail?.Invoke();
+                    Fail();
                     break;
                 }
             }

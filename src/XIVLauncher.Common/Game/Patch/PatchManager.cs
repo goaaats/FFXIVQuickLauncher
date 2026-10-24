@@ -34,6 +34,9 @@ namespace XIVLauncher.Common.Game.Patch
     {
         public const int MAX_DOWNLOADS_AT_ONCE = 4;
 
+        private static readonly TimeSpan CancelDownloadsTimeout = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan CancelInstallTimeout = TimeSpan.FromMinutes(15);
+
         private readonly CancellationTokenSource _cancelTokenSource = new();
 
         private readonly IPatchAcquisition acquisition;
@@ -257,23 +260,21 @@ namespace XIVLauncher.Common.Game.Patch
 
         private void CancelAllDownloads()
         {
-            foreach (var task in this.AcquisitionTasks)
-            {
-                if (task == null)
-                    continue;
+            var cancels = this.AcquisitionTasks
+                .Where(task => task != null)
+                .Select(task => Task.Run(task!.CancelAsync))
+                .ToArray();
 
-                try
+            try
+            {
+                if (!Task.WaitAll(cancels, CancelDownloadsTimeout))
                 {
-                    Task.Run(async () =>
-                    {
-                        await task.CancelAsync();
-                    }, new CancellationTokenSource(5000).Token).GetAwaiter().GetResult();
-                    Thread.Sleep(200);
+                    Log.Error("Timed out cancelling downloads");
                 }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Could not cancel download.");
-                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Could not cancel download.");
             }
         }
 
@@ -376,9 +377,27 @@ namespace XIVLauncher.Common.Game.Patch
 
                 this.installer.StartInstall(this.gamePath, GetPatchFile(toInstall.Patch), toInstall.Patch);
 
+                var cancelWait = new Stopwatch();
+
                 while (this.installer.State == PatchInstaller.InstallerState.Busy)
                 {
                     Thread.Sleep(100);
+
+                    if (!this.IsCancelling)
+                    {
+                        continue;
+                    }
+
+                    if (!cancelWait.IsRunning)
+                    {
+                        cancelWait.Start();
+                    }
+
+                    if (cancelWait.Elapsed > CancelInstallTimeout)
+                    {
+                        Log.Error("Install of {VersionId} did not finish after cancelling", toInstall.Patch.VersionId);
+                        this.installer.Abort();
+                    }
                 }
 
                 // Stop the download queue to make sure that PatchAsync completes
