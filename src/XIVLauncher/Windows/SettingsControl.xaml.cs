@@ -306,6 +306,12 @@ namespace XIVLauncher.Windows
                             CustomMessageBox.Show(Loc.Localize("IntegrityCheckValid", "Your game install seems to be valid."), "XIVLauncher", MessageBoxButton.OK,
                                 MessageBoxImage.Asterisk, parentWindow: Window.GetWindow(this));
                             break;
+
+                        case IntegrityCheck.CompareResult.ValidMissingExpansions:
+                            CustomMessageBox.Show(Loc.Localize("IntegrityCheckValidMissingExpansions",
+                                    "Your game install seems to be valid.\n\nSome expansions are not installed and were not checked."),
+                                "XIVLauncher", MessageBoxButton.OK, MessageBoxImage.Asterisk, parentWindow: Window.GetWindow(this));
+                            break;
                     }
                 });
             });
