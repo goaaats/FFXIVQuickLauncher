@@ -156,13 +156,8 @@ namespace XIVLauncher
             public Lease Lease { get; private set; } = lease;
         }
 
-        private static async Task<UpdateResult> LeaseUpdateManager(bool prerelease)
+        private static async Task<UpdateResult> LeaseUpdateManager(HttpClient client, bool prerelease)
         {
-            using var client = new HttpClient(new SocketsHttpHandler()
-            {
-                ConnectCallback = new HappyEyeballsCallback().ConnectCallback
-            });
-
             client.Timeout = TimeSpan.FromMinutes(60);
             client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("XIVLauncher", AppUtil.GetGitHash()));
             client.DefaultRequestHeaders.AddWithoutValidation("X-XL-Track", prerelease ? TrackPrerelease : TrackRelease);
@@ -232,7 +227,12 @@ namespace XIVLauncher
         {
             try
             {
-                var updateResult = await LeaseUpdateManager(downloadPrerelease).ConfigureAwait(false);
+                using var client = new HttpClient(new SocketsHttpHandler()
+                {
+                    ConnectCallback = new HappyEyeballsCallback().ConnectCallback
+                });
+
+                var updateResult = await LeaseUpdateManager(client, downloadPrerelease).ConfigureAwait(false);
                 UpdateLease = updateResult.Lease;
 
                 // Log feature flags
