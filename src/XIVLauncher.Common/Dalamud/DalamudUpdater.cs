@@ -171,7 +171,7 @@ namespace XIVLauncher.Common.Dalamud
         private static string GetBetaTrackName(string betaKind) =>
             string.IsNullOrEmpty(betaKind) ? "staging" : betaKind;
 
-        private async Task<(DalamudVersionInfo release, DalamudVersionInfo? staging)> GetVersionInfo(string? betaKind, string? betaKey)
+        private async Task<(DalamudVersionInfo? release, DalamudVersionInfo? staging)> GetVersionInfo(string? betaKind, string? betaKey)
         {
             var message = new HttpRequestMessage(HttpMethod.Get, DalamudLauncher.REMOTE_BASE + $"release&bucket={this.RolloutBucket}");
             message.Headers.CacheControl = new CacheControlHeaderValue
@@ -188,10 +188,16 @@ namespace XIVLauncher.Common.Dalamud
 
             if (!string.IsNullOrEmpty(betaKey) && !string.IsNullOrEmpty(betaKind))
             {
-                var versionInfoJsonStaging = await this.client.GetAsync(DalamudLauncher.REMOTE_BASE + GetBetaTrackName(betaKind)).ConfigureAwait(false);
+                using var versionInfoJsonStaging = await this.client.GetAsync(DalamudLauncher.REMOTE_BASE + GetBetaTrackName(betaKind)).ConfigureAwait(false);
 
-                if (versionInfoJsonStaging.StatusCode != HttpStatusCode.BadRequest)
+                if (versionInfoJsonStaging.IsSuccessStatusCode)
+                {
                     versionInfoStaging = JsonConvert.DeserializeObject<DalamudVersionInfo>(await versionInfoJsonStaging.Content.ReadAsStringAsync().ConfigureAwait(false));
+                }
+                else if (versionInfoJsonStaging.StatusCode != HttpStatusCode.BadRequest)
+                {
+                    Log.Warning("[DUPDATE] Could not get version info for track {Track}: {StatusCode}", GetBetaTrackName(betaKind), versionInfoJsonStaging.StatusCode);
+                }
             }
 
             return (versionInfoRelease, versionInfoStaging);
@@ -200,6 +206,9 @@ namespace XIVLauncher.Common.Dalamud
         private async Task UpdateDalamud(string? betaKind, string? betaKey)
         {
             var (versionInfoRelease, versionInfoStaging) = await GetVersionInfo(betaKind, betaKey).ConfigureAwait(false);
+
+            if (versionInfoRelease == null)
+                throw new Exception("Release Dalamud version info deserialized to null");
 
             var remoteVersionInfo = versionInfoRelease;
 
