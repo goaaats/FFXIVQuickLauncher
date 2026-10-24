@@ -819,7 +819,7 @@ namespace XIVLauncher.Windows.ViewModel
                         case IOException:
                             summaries.Add(Loc.Localize("LoginIoErrorSummary",
                                 "Could not locate game data files."));
-                            summaries.Add(Loc.Localize("LoginIoErrorActionable",
+                            actionables.Add(Loc.Localize("LoginIoErrorActionable",
                                 "This may mean that the game path set in XIVLauncher isn't preset, e.g. on a disconnected drive or network storage. Please check the game path in the XIVLauncher settings."));
                             descriptions.Add(exception.ToString());
                             break;
