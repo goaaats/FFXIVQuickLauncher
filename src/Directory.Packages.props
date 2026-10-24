@@ -28,10 +28,6 @@
         <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />
         <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" />
         <PackageVersion Include="Velopack" Version="0.0.1298" />
-        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-        <PackageVersion Include="MSTest.TestAdapter" Version="3.8.2" />
-        <PackageVersion Include="MSTest.TestFramework" Version="3.8.2" />
-        <PackageVersion Include="coverlet.collector" Version="6.0.4" />
         <PackageVersion Include="goaaats.Steamworks" Version="2.3.4" />
         <PackageVersion Include="Microsoft.Win32.Registry" Version="6.0.0-preview.5.21301.5" />
         <PackageVersion Include="PInvoke.Kernel32" Version="0.7.124" />
