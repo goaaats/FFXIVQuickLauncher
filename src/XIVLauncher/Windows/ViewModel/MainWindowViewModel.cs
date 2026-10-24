@@ -198,6 +198,22 @@ namespace XIVLauncher.Windows.ViewModel
         {
             ProblemCheck.RunCheck(_window);
 
+            if (App.Settings.GamePath == null || !Directory.Exists(App.Settings.GamePath.FullName))
+            {
+                CustomMessageBox.Builder
+                    .NewFrom(Loc.Localize("GamePathNotFoundError", "The game folder set in XIVLauncher could not be found or could not be accessed.\n\n"
+                                                                   + "If it is on an external or network drive, please make sure that it is connected. Otherwise, please check the game path in the XIVLauncher settings."))
+                    .WithDescription(App.Settings.GamePath?.FullName)
+                    .WithImage(MessageBoxImage.Error)
+                    .WithButtons(MessageBoxButton.OK)
+                    .WithShowHelpLinks()
+                    .WithCaption("XIVLauncher")
+                    .WithParentWindow(_window)
+                    .Show();
+
+                return;
+            }
+
             var bootRes = await HandleBootCheck().ConfigureAwait(false);
 
             if (!bootRes)
@@ -834,7 +850,7 @@ namespace XIVLauncher.Windows.ViewModel
                             summaries.Add(string.Format(
                                 Loc.Localize("UnexpectedErrorSummary",
                                     "Unexpected error has occurred. ({0})"),
-                                $"0x{(uint)win32Exception.HResult:X8}: {win32Exception.Message}"));
+                                $"0x{(uint)win32Exception.NativeErrorCode:X8}: {win32Exception.Message}"));
                             actionables.Add(Loc.Localize("UnexpectedErrorActionable",
                                 "Please report this error."));
                             descriptions.Add(exception.ToString());
