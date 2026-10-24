@@ -23,6 +23,8 @@ namespace XIVLauncher.Common.Dalamud
         private readonly IUniqueIdCache? cache;
         private readonly HttpClient client;
 
+        private readonly ManualResetEventSlim updateFinished = new(false);
+
         public DownloadState State { get; private set; } = DownloadState.Unknown;
         public bool IsStaging { get; private set; } = false;
 
@@ -126,6 +128,7 @@ namespace XIVLauncher.Common.Dalamud
         {
             Log.Information("[DUPDATE] Starting...");
             this.State = DownloadState.Running;
+            this.updateFinished.Reset();
 
             this.ResolvedBranch = null;
 
@@ -151,7 +154,13 @@ namespace XIVLauncher.Common.Dalamud
                 }
 
                 this.State = isUpdated ? DownloadState.Done : DownloadState.NoIntegrity;
+                this.updateFinished.Set();
             });
+        }
+
+        public void WaitForUpdate()
+        {
+            this.updateFinished.Wait();
         }
 
         public bool? ReCheckVersion(DirectoryInfo gamePath)
