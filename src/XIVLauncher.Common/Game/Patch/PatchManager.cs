@@ -140,11 +140,25 @@ namespace XIVLauncher.Common.Game.Patch
 
             await Task.WhenAll(new[]
             {
-                Task.Run(RunDownloadQueue, _cancelTokenSource.Token),
-                Task.Run(RunApplyQueue, _cancelTokenSource.Token),
+                Task.Run(() => RunQueue(RunDownloadQueue), _cancelTokenSource.Token),
+                Task.Run(() => RunQueue(RunApplyQueue), _cancelTokenSource.Token),
             }).ConfigureAwait(false);
 
             return !this.IsCancelling && this.installer.State != PatchInstaller.InstallerState.Failed;
+        }
+
+        private void RunQueue(Action queue)
+        {
+            try
+            {
+                queue();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Patch queue failed");
+                StartCancellation();
+                throw;
+            }
         }
 
         public void StartCancellation()
