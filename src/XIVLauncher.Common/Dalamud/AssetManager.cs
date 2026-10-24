@@ -44,11 +44,6 @@ namespace XIVLauncher.Common.Dalamud
 
         public static async Task<(DirectoryInfo AssetDir, int Version)> EnsureAssets(HttpClient client, DalamudUpdater updater, DirectoryInfo baseDir)
         {
-            client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
-            {
-                NoCache = true,
-            };
-
             using var sha1 = SHA1.Create();
 
             Log.Verbose("[DASSET] Starting asset download");
@@ -177,7 +172,16 @@ namespace XIVLauncher.Common.Dalamud
                 Log.Error(ex, "[DASSET] Could not read asset.ver");
             }
 
-            var remoteVer = JsonSerializer.Deserialize<AssetInfo>(await client.GetStringAsync(ASSET_STORE_URL));
+            using var message = new HttpRequestMessage(HttpMethod.Get, ASSET_STORE_URL);
+            message.Headers.CacheControl = new CacheControlHeaderValue
+            {
+                NoCache = true,
+            };
+
+            using var response = await client.SendAsync(message);
+            response.EnsureSuccessStatusCode();
+
+            var remoteVer = JsonSerializer.Deserialize<AssetInfo>(await response.Content.ReadAsStringAsync());
             if (remoteVer == null)
                 throw new Exception("Could not get remote asset info");
 
