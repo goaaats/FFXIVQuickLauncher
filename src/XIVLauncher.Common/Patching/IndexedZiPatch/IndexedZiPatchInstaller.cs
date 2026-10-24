@@ -13,6 +13,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using XIVLauncher.Common.Http.HappyEyeballs;
 using XIVLauncher.Common.Patching.Util;
 
 #nullable enable
@@ -484,8 +485,13 @@ public class IndexedZiPatchInstaller : IDisposable
         private static readonly int[] ReattemptWait = [0, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000, 25000, 30000, 45000, 60000];
         private const int MergedGapDownload = 512;
 
+        private static readonly HttpClient Client = new(new SocketsHttpHandler
+        {
+            UseCookies = false,
+            ConnectCallback = new HappyEyeballsCallback().ConnectCallback,
+        });
+
         public readonly string SourceUrl;
-        private readonly HttpClient client = new();
         private readonly List<long> targetPartOffsets;
         private readonly string? sid;
 
@@ -546,7 +552,7 @@ public class IndexedZiPatchInstaller : IDisposable
 
             try
             {
-                var resp = await this.client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                var resp = await Client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 this.multipartResponse = new(resp);
             }
             catch (HttpRequestException e)
@@ -625,7 +631,6 @@ public class IndexedZiPatchInstaller : IDisposable
         public override void Dispose()
         {
             this.multipartResponse?.Dispose();
-            this.client.Dispose();
             base.Dispose();
         }
     }

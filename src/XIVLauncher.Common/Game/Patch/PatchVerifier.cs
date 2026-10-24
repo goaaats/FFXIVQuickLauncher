@@ -529,7 +529,7 @@ namespace XIVLauncher.Common.Game.Patch
             CurrentFile = "latest.json";
             Total = Progress = 0;
 
-            var latestVersionJson = await _client.GetStringAsync(BASE_URL + "latest.json").ConfigureAwait(false);
+            var latestVersionJson = await _client.GetStringAsync(BASE_URL + "latest.json", _cancellationTokenSource.Token).ConfigureAwait(false);
             _cancellationTokenSource.Token.ThrowIfCancellationRequested();
 
             var latestVersion = JsonConvert.DeserializeObject<VerifyVersions>(latestVersionJson);
@@ -590,7 +590,7 @@ namespace XIVLauncher.Common.Game.Patch
 
             if (!File.Exists(filePath))
             {
-                var request = await _client.GetAsync($"{BASE_URL}{repoShorthand}/{fileName}", HttpCompletionOption.ResponseHeadersRead, _cancellationTokenSource.Token).ConfigureAwait(false);
+                using var request = await _client.GetAsync($"{BASE_URL}{repoShorthand}/{fileName}", HttpCompletionOption.ResponseHeadersRead, _cancellationTokenSource.Token).ConfigureAwait(false);
                 if (request.StatusCode == HttpStatusCode.NotFound)
                     throw new NoVersionReferenceException(repo, latestVersion);
 
