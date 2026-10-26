@@ -83,6 +83,11 @@ public class HttpClientDownloadWithProgress
                 this.TriggerProgressChanged(totalDownloadSize, totalBytesRead);
         }
         while (isMoreToRead);
+
+        if (totalDownloadSize.HasValue && totalBytesRead != totalDownloadSize.Value)
+        {
+            throw new IOException($"Download incomplete, got {totalBytesRead}/{totalDownloadSize.Value} bytes: {this.downloadUrl}");
+        }
     }
 
     private void TriggerProgressChanged(long? totalDownloadSize, long totalBytesRead)
