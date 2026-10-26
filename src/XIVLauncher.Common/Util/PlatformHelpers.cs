@@ -1,10 +1,12 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Threading;
 using Serilog;
 
 namespace XIVLauncher.Common.Util;
@@ -59,8 +61,56 @@ public static class PlatformHelpers
         }
         else
         {
-            dir.Delete(true);
+            ForceDeleteDirectory(dir);
             dir.Create();
+        }
+    }
+
+    private const int DeleteTries = 3;
+    private static readonly TimeSpan DeleteRetryDelay = TimeSpan.FromSeconds(1);
+
+    internal static void ForceDeleteDirectory(DirectoryInfo dir)
+    {
+        for (var tries = 1;; tries++)
+        {
+            dir.Refresh();
+
+            if (!dir.Exists)
+            {
+                return;
+            }
+
+            try
+            {
+                ClearReadOnly(dir);
+                dir.Delete(true);
+                return;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException && tries < DeleteTries)
+            {
+                Log.Warning(ex, "Could not delete {Path}, try {Try}/{MaxTries}", dir.FullName, tries, DeleteTries);
+                Thread.Sleep(DeleteRetryDelay);
+            }
+        }
+    }
+
+    private static void ClearReadOnly(DirectoryInfo dir)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var entries = dir.EnumerateFileSystemInfos("*", SearchOption.AllDirectories).Append(dir);
+
+        foreach (var entry in entries)
+        {
+            if (!entry.Attributes.HasFlag(FileAttributes.ReadOnly))
+            {
+                continue;
+            }
+
+            entry.Attributes &= ~FileAttributes.ReadOnly;
         }
     }
 

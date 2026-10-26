@@ -227,7 +227,7 @@ namespace XIVLauncher.Common.Dalamud
             {
                 if (toDelete.Name != devDir.Name && toDelete.Name != currentDir.Name)
                 {
-                    toDelete.Delete(true);
+                    PlatformHelpers.ForceDeleteDirectory(toDelete);
                     Log.Verbose("[DASSET] Cleaned out {Path}", toDelete.FullName);
                 }
             }

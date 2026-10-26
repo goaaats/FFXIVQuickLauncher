@@ -566,7 +566,7 @@ namespace XIVLauncher.Common.Dalamud
 
                 try
                 {
-                    directory.Delete(true);
+                    PlatformHelpers.ForceDeleteDirectory(directory);
                 }
                 catch
                 {
@@ -598,7 +598,7 @@ namespace XIVLauncher.Common.Dalamud
 
                     try
                     {
-                        directory.Delete(true);
+                        PlatformHelpers.ForceDeleteDirectory(directory);
                     }
                     catch (Exception ex)
                     {
@@ -623,7 +623,7 @@ namespace XIVLauncher.Common.Dalamud
                     throw new DalamudIntegrityException("Cannot replace Dalamud while the game is running");
                 }
 
-                addonPath.Delete(true);
+                PlatformHelpers.ForceDeleteDirectory(addonPath);
             }
 
             addonPath.Create();
@@ -716,7 +716,7 @@ namespace XIVLauncher.Common.Dalamud
             }
             else
             {
-                runtimePath.Delete(true);
+                PlatformHelpers.ForceDeleteDirectory(runtimePath);
                 runtimePath.Create();
             }
 
