@@ -127,6 +127,13 @@ namespace XIVLauncher.Common.Dalamud
             NoIntegrity, // fail with error message
         }
 
+        private enum RuntimeIntegrity
+        {
+            Valid,
+            Invalid,
+            Unknown, // hashes unavailable, can't tell
+        }
+
         public DalamudUpdater(HttpClient client, DirectoryInfo addonDirectory, DirectoryInfo runtimeDirectory, DirectoryInfo assetRootDirectory, IUniqueIdCache? cache, string? dalamudRolloutBucket)
         {
             this.addonDirectory = addonDirectory;
@@ -400,14 +407,14 @@ namespace XIVLauncher.Common.Dalamud
                 if (!this.Runtime.Exists)
                     Directory.CreateDirectory(this.Runtime.FullName);
 
-                var isRuntimeIntegrity = false;
+                var runtimeIntegrity = RuntimeIntegrity.Unknown;
 
                 // Only check runtime hashes if we don't need to update it
                 if (!runtimeNeedsUpdate)
                 {
                     try
                     {
-                        isRuntimeIntegrity = await CheckRuntimeHashes(Runtime, localVersion).ConfigureAwait(false);
+                        runtimeIntegrity = await CheckRuntimeHashes(Runtime, localVersion).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -415,7 +422,7 @@ namespace XIVLauncher.Common.Dalamud
                     }
                 }
 
-                if (runtimePaths.Any(p => !p.Exists) || runtimeNeedsUpdate || !isRuntimeIntegrity)
+                if (runtimePaths.Any(p => !p.Exists) || runtimeNeedsUpdate || runtimeIntegrity == RuntimeIntegrity.Invalid)
                 {
                     Log.Information("[DUPDATE] Not found, outdated or no integrity: {LocalVer} - {RemoteVer}", localVersion, remoteVersionInfo.RuntimeVersion);
 
@@ -425,6 +432,19 @@ namespace XIVLauncher.Common.Dalamud
                     {
                         Log.Verbose("[DUPDATE] Now download runtime...");
                         await DownloadRuntime(this.Runtime, remoteVersionInfo.RuntimeVersion).ConfigureAwait(false);
+
+                        var downloadIntegrity = await CheckRuntimeHashes(this.Runtime, remoteVersionInfo.RuntimeVersion).ConfigureAwait(false);
+
+                        if (downloadIntegrity == RuntimeIntegrity.Invalid)
+                        {
+                            throw new DalamudIntegrityException("No runtime integrity after download");
+                        }
+
+                        if (downloadIntegrity == RuntimeIntegrity.Unknown)
+                        {
+                            Log.Warning("[DUPDATE] Could not verify runtime {Version}, rechecking on next launch", remoteVersionInfo.RuntimeVersion);
+                        }
+
                         File.WriteAllText(versionFile.FullName, remoteVersionInfo.RuntimeVersion);
                     }
                     catch (Exception ex)
@@ -674,7 +694,7 @@ namespace XIVLauncher.Common.Dalamud
             return localVersion;
         }
 
-        private async Task<bool> CheckRuntimeHashes(DirectoryInfo runtimePath, string version)
+        private async Task<RuntimeIntegrity> CheckRuntimeHashes(DirectoryInfo runtimePath, string version)
         {
             var hashesFile = new FileInfo(Path.Combine(runtimePath.FullName, $"hashes-{version}.json"));
             string? runtimeHashes;
@@ -690,7 +710,13 @@ namespace XIVLauncher.Common.Dalamud
                 catch (Exception ex)
                 {
                     Log.Error(ex, "[DUPDATE] Could not download hashes for runtime v{Version}", version);
-                    return false;
+                    return RuntimeIntegrity.Unknown;
+                }
+
+                if (!IsValidHashes(runtimeHashes))
+                {
+                    Log.Error("[DUPDATE] Invalid hashes for runtime v{Version}", version);
+                    return RuntimeIntegrity.Unknown;
                 }
 
                 File.WriteAllText(hashesFile.FullName, runtimeHashes);
@@ -700,7 +726,19 @@ namespace XIVLauncher.Common.Dalamud
                 runtimeHashes = File.ReadAllText(hashesFile.FullName);
             }
 
-            return CheckIntegrity(runtimePath, runtimeHashes);
+            return CheckIntegrity(runtimePath, runtimeHashes) ? RuntimeIntegrity.Valid : RuntimeIntegrity.Invalid;
+        }
+
+        private static bool IsValidHashes(string hashesJson)
+        {
+            try
+            {
+                return JsonConvert.DeserializeObject<Dictionary<string, string>>(hashesJson) is { Count: > 0 };
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
 
         private async Task DownloadRuntime(DirectoryInfo runtimePath, string version)
@@ -721,7 +759,7 @@ namespace XIVLauncher.Common.Dalamud
             }
 
             // Wait for it to be gone, thanks Windows
-            Thread.Sleep(1000);
+            await Task.Delay(1000).ConfigureAwait(false);
 
             var dotnetUrl = $"https://kamori.goats.dev/Dalamud/Release/Runtime/DotNet/{version}";
             var desktopUrl = $"https://kamori.goats.dev/Dalamud/Release/Runtime/WindowsDesktop/{version}";
