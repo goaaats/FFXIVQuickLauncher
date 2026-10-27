@@ -433,6 +433,8 @@ namespace XIVLauncher.Common.Dalamud
                         Log.Verbose("[DUPDATE] Now download runtime...");
                         await DownloadRuntime(this.Runtime, remoteVersionInfo.RuntimeVersion).ConfigureAwait(false);
 
+                        File.WriteAllText(versionFile.FullName, remoteVersionInfo.RuntimeVersion);
+
                         var downloadIntegrity = await CheckRuntimeHashes(this.Runtime, remoteVersionInfo.RuntimeVersion).ConfigureAwait(false);
 
                         if (downloadIntegrity == RuntimeIntegrity.Invalid)
@@ -444,8 +446,6 @@ namespace XIVLauncher.Common.Dalamud
                         {
                             Log.Warning("[DUPDATE] Could not verify runtime {Version}, rechecking on next launch", remoteVersionInfo.RuntimeVersion);
                         }
-
-                        File.WriteAllText(versionFile.FullName, remoteVersionInfo.RuntimeVersion);
                     }
                     catch (Exception ex)
                     {
