@@ -99,11 +99,13 @@ namespace XIVLauncher
         {
             private readonly HttpClient client;
             private readonly Lease lease;
+            private readonly IReadOnlyDictionary<string, string> leaseHeaders;
 
-            public FakeSquirrelFileDownloader(HttpClient client, Lease lease, bool prerelease)
+            public FakeSquirrelFileDownloader(HttpClient client, Lease lease, IReadOnlyDictionary<string, string> leaseHeaders)
             {
                 this.client = client;
                 this.lease = lease;
+                this.leaseHeaders = leaseHeaders;
             }
 
             public async Task DownloadFile(string url, string targetFile, Action<int> progress, IDictionary<string, string>? headers = null, double timeout = 30, CancellationToken cancelToken = new CancellationToken())
@@ -123,7 +125,8 @@ namespace XIVLauncher
 
             private async Task<long> Download(string fileNeeded, string targetFile, CancellationToken cancelToken)
             {
-                using var response = await client.GetAsync($"{LeaseFileUrl}/{fileNeeded}", HttpCompletionOption.ResponseHeadersRead, cancelToken).ConfigureAwait(false);
+                using var request = CreateLeaseRequest($"{LeaseFileUrl}/{fileNeeded}", this.leaseHeaders);
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancelToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 using var contentStream = await response.Content.ReadAsStreamAsync(cancelToken).ConfigureAwait(false);
 
@@ -193,22 +196,23 @@ namespace XIVLauncher
 
         private static async Task<UpdateResult> LeaseUpdateManager(HttpClient client, bool prerelease)
         {
-            client.Timeout = RequestTimeout;
-            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("XIVLauncher", AppUtil.GetGitHash()));
-            client.DefaultRequestHeaders.AddWithoutValidation("X-XL-Track", prerelease ? TrackPrerelease : TrackRelease);
-            client.DefaultRequestHeaders.AddWithoutValidation("X-XL-LV", "0");
-            client.DefaultRequestHeaders.AddWithoutValidation("X-XL-HaveVersion", AppUtil.GetAssemblyVersion());
-            client.DefaultRequestHeaders.AddWithoutValidation("X-XL-HaveAddon", App.Settings.InGameAddonEnabled ? "yes" : "no");
-            client.DefaultRequestHeaders.AddWithoutValidation("X-XL-FirstStart", App.Settings.VersionUpgradeLevel == 0 ? "yes" : "no");
-            client.DefaultRequestHeaders.AddWithoutValidation("X-XL-HaveWine", EnvironmentSettings.IsWine ? "yes" : "no");
+            var leaseHeaders = new Dictionary<string, string>
+            {
+                ["X-XL-Track"] = prerelease ? TrackPrerelease : TrackRelease,
+                ["X-XL-LV"] = "0",
+                ["X-XL-HaveVersion"] = AppUtil.GetAssemblyVersion(),
+                ["X-XL-HaveAddon"] = App.Settings.InGameAddonEnabled ? "yes" : "no",
+                ["X-XL-FirstStart"] = App.Settings.VersionUpgradeLevel == 0 ? "yes" : "no",
+                ["X-XL-HaveWine"] = EnvironmentSettings.IsWine ? "yes" : "no",
+            };
 
-            var leaseJson = await Retry(() => GetLease(client), CancellationToken.None).ConfigureAwait(false);
+            var leaseJson = await Retry(() => GetLease(client, leaseHeaders), CancellationToken.None).ConfigureAwait(false);
             var leaseData = JsonConvert.DeserializeObject<Lease>(leaseJson);
 
             if (leaseData == null || !leaseData.Success)
                 throw new LeaseAcquisitionException(leaseData?.Message ?? "No lease data");
 
-            var fakeDownloader = new FakeSquirrelFileDownloader(client, leaseData, prerelease);
+            var fakeDownloader = new FakeSquirrelFileDownloader(client, leaseData, leaseHeaders);
             var source = new SimpleWebSource(FakeUrlPrefix, fakeDownloader);
 
             // Velopack bug: Delta updates are not reliable at the moment
@@ -223,9 +227,23 @@ namespace XIVLauncher
             return new UpdateResult(manager, leaseData);
         }
 
-        private static async Task<string> GetLease(HttpClient client)
+        private static HttpRequestMessage CreateLeaseRequest(string url, IReadOnlyDictionary<string, string> leaseHeaders)
         {
-            using var response = await client.GetAsync(LeaseMetaUrl).ConfigureAwait(false);
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("XIVLauncher", AppUtil.GetGitHash()));
+
+            foreach (var (key, value) in leaseHeaders)
+            {
+                request.Headers.AddWithoutValidation(key, value);
+            }
+
+            return request;
+        }
+
+        private static async Task<string> GetLease(HttpClient client, IReadOnlyDictionary<string, string> leaseHeaders)
+        {
+            using var request = CreateLeaseRequest(LeaseMetaUrl, leaseHeaders);
+            using var response = await client.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             if (response.Headers.TryGetValues("X-XL-Canary", out var values) &&
@@ -295,7 +313,10 @@ namespace XIVLauncher
                 using var client = new HttpClient(new SocketsHttpHandler()
                 {
                     ConnectCallback = new HappyEyeballsCallback().ConnectCallback
-                });
+                })
+                {
+                    Timeout = RequestTimeout,
+                };
 
                 var updateResult = await LeaseUpdateManager(client, downloadPrerelease).ConfigureAwait(false);
                 UpdateLease = updateResult.Lease;
