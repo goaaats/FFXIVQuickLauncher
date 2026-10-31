@@ -135,6 +135,12 @@ namespace XIVLauncher.Common.Game.Patch
 
             [JsonProperty("ex5Revision")]
             public int Ex5Revision { get; set; }
+
+            [JsonProperty("ex6")]
+            public string Ex6 { get; set; }
+
+            [JsonProperty("ex6Revision")]
+            public int Ex6Revision { get; set; }
         }
 
         public VerifyState State { get; private set; } = VerifyState.NotStarted;
@@ -512,7 +518,7 @@ namespace XIVLauncher.Common.Game.Patch
 
         private async Task GetPatchMeta()
         {
-            PatchSetCount = 6;
+            PatchSetCount = 7;
             PatchSetIndex = 0;
 
             _repoMetaPaths.Clear();
@@ -555,6 +561,11 @@ namespace XIVLauncher.Common.Game.Patch
             PatchSetIndex++;
             if (_maxExpansionToCheck >= 5)
                 await this.GetRepoMeta(Repository.Ex5, latestVersion.Ex5, metaFolder, latestVersion.Ex5Revision).ConfigureAwait(false);
+            _cancellationTokenSource.Token.ThrowIfCancellationRequested();
+
+            PatchSetIndex++;
+            if (_maxExpansionToCheck >= 6)
+                await this.GetRepoMeta(Repository.Ex6, latestVersion.Ex6, metaFolder, latestVersion.Ex6Revision).ConfigureAwait(false);
             _cancellationTokenSource.Token.ThrowIfCancellationRequested();
 
             PatchSetIndex++;
